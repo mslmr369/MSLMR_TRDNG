@@ -1,0 +1,28 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+*.env
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# Machine Learning
+*.h5
+*.keras
+*.model
+
+# Data
+*.csv
+*.xlsx
+*.pkl
+
+# Security
+secrets.py

@@ -1,0 +1,58 @@
+# Entorno virtual
+venv/
+*.venv
+.env
+
+# Archivos de Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de logs
+*.log
+logs/
+
+# Archivos de configuración IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos de sistemas
+.DS_Store
+Thumbs.db
+
+# Datos sensibles
+*.key
+*.pem
+secrets.py
+
+# Archivos de modelos de machine learning
+*.h5
+*.keras
+*.model
+ml_models/
+
+# Archivos de datos
+*.csv
+*.xlsx
+*.json
+data/historical/
+data/processed/
+
+# Archivos de entorno
+.env.local
+.env.development
+.env.production
+
+# Cachés
+.cache/
+.pytest_cache/
+
+# Archivos de distribución
+dist/
+build/
+*.egg-info/
+
+# Archivos de dependencias
+*.lock

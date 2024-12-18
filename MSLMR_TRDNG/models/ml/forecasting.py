@@ -4,65 +4,66 @@ import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from typing import Dict, List, Optional, Tuple
+from models.base import BaseModel
 
-class TimeSeriesForecaster:
+class TimeSeriesForecaster(BaseModel):
     """
     Modelo de predicción de series temporales usando redes neuronales
     Soporta múltiples arquitecturas y configuraciones
     """
     def __init__(
-        self, 
+        self,
         model_type: str = 'lstm',
         sequence_length: int = 60,
         forecast_horizon: int = 1,
-        features: List[str] = None
+        features: List[str] = None,
+        scaler: Optional[MinMaxScaler] = None
     ):
         """
         Inicializa el modelo de forecasting
-        
+
         :param model_type: Tipo de modelo (lstm, gru, transformer)
         :param sequence_length: Longitud de secuencia de entrada
         :param forecast_horizon: Número de pasos a predecir
         :param features: Características para predicción
+        :param scaler: Objeto MinMaxScaler para escalar datos
         """
+        super().__init__()
         self.model_type = model_type
         self.sequence_length = sequence_length
         self.forecast_horizon = forecast_horizon
         self.features = features or ['close']
-        
+
         self.model = None
-        self.scaler = MinMaxScaler()
+        self.scaler = scaler or MinMaxScaler()
         self.is_trained = False
-    
-    def _prepare_data(
-        self, 
-        data: pd.DataFrame
-    ) -> Tuple[np.ndarray, np.ndarray]:
+
+    def _prepare_data(self, data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
         Prepara datos para entrenamiento de modelo
-        
+
         :param data: DataFrame con datos
         :return: X (secuencias), y (objetivo)
         """
         # Seleccionar características
         X_data = data[self.features]
         y_data = data['close']
-        
+
         # Escalar datos
         X_scaled = self.scaler.fit_transform(X_data)
-        
+
         # Preparar secuencias
         X, y = [], []
         for i in range(len(X_scaled) - self.sequence_length - self.forecast_horizon + 1):
             X.append(X_scaled[i:i+self.sequence_length])
             y.append(y_data.iloc[i+self.sequence_length:i+self.sequence_length+self.forecast_horizon].values)
-        
+
         return np.array(X), np.array(y)
-    
+
     def _build_lstm_model(self, input_shape: Tuple[int, int]) -> tf.keras.Model:
         """
         Construye modelo LSTM
-        
+
         :param input_shape: Forma de entrada
         :return: Modelo Keras
         """
@@ -71,19 +72,19 @@ class TimeSeriesForecaster:
             tf.keras.layers.LSTM(32),
             tf.keras.layers.Dense(self.forecast_horizon)
         ])
-        
+
         model.compile(
-            optimizer='adam', 
-            loss='mse', 
+            optimizer='adam',
+            loss='mse',
             metrics=['mae']
         )
-        
+
         return model
-    
+
     def _build_gru_model(self, input_shape: Tuple[int, int]) -> tf.keras.Model:
         """
         Construye modelo GRU
-        
+
         :param input_shape: Forma de entrada
         :return: Modelo Keras
         """
@@ -92,58 +93,60 @@ class TimeSeriesForecaster:
             tf.keras.layers.GRU(32),
             tf.keras.layers.Dense(self.forecast_horizon)
         ])
-        
+
         model.compile(
-            optimizer='adam', 
-            loss='mse', 
+            optimizer='adam',
+            loss='mse',
             metrics=['mae']
         )
-        
+
         return model
-    
+
     def _build_transformer_model(self, input_shape: Tuple[int, int]) -> tf.keras.Model:
         """
         Construye modelo Transformer
-        
+
         :param input_shape: Forma de entrada
         :return: Modelo Keras
         """
         inputs = tf.keras.Input(shape=input_shape)
-        
+
         # Layers de embeddings
         x = tf.keras.layers.MultiHeadAttention(
-            num_heads=4, 
+            num_heads=4,
             key_dim=32
         )(inputs, inputs)
-        
+
         x = tf.keras.layers.LayerNormalization()(x)
         x = tf.keras.layers.Flatten()(x)
-        
+
         x = tf.keras.layers.Dense(64, activation='relu')(x)
         x = tf.keras.layers.Dropout(0.3)(x)
-        
+
         outputs = tf.keras.layers.Dense(
-            self.forecast_horizon, 
+            self.forecast_horizon,
             activation='linear'
         )(x)
-        
+
         model = tf.keras.Model(inputs=inputs, outputs=outputs)
-        
+
         model.compile(
-            optimizer='adam', 
-            loss='mse', 
+            optimizer='adam',
+            loss='mse',
             metrics=['mae']
         )
-        
+
         return model
-    
+
     def train(
-        self, 
-        data: pd.DataFrame, 
-        epochs: int = 50, 
+        self,
+        data: pd.DataFrame,
+        target: str = None,
+        epochs: int = 50,
         batch_size: int = 32,
         validation_split: float = 0.2
     ):
+
         """
         Entrena el modelo de forecasting
         

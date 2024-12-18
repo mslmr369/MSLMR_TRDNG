@@ -1,15 +1,12 @@
-# Correctly using DatabaseInteractor and removing session management
 import os
 import json
 import pandas as pd
-import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.exc import SQLAlchemyError
+import glob
 from typing import Dict, List, Optional
 import logging
 from datetime import datetime
 from core.database_interactor import DatabaseInteractor
-from core.database import Base
 from data.models import MarketDataModel, IndicatorDataModel
 
 class DataStorageManager:
@@ -18,23 +15,23 @@ class DataStorageManager:
     Soporta múltiples backends: PostgreSQL, CSV, JSON
     """
     def __init__(
-        self, 
+        self,
         database_url: Optional[str] = None,
         storage_path: str = './data/storage'
     ):
         """
         Inicializa gestor de almacenamiento
-        
+
         :param database_url: URL de conexión a base de datos
         :param storage_path: Ruta para almacenamiento de archivos
         """
         # Configurar logger
         self.logger = logging.getLogger(__name__)
-        
+
         # Configurar almacenamiento de archivos
         os.makedirs(storage_path, exist_ok=True)
         self.storage_path = storage_path
-        
+
         # Configurar base de datos si se proporciona URL
         self.db_interactor = None
         if database_url:
@@ -47,13 +44,13 @@ class DataStorageManager:
                 self.db_interactor = None
 
     def store_market_data(
-        self, 
+        self,
         data: Dict[str, Dict[str, pd.DataFrame]],
         storage_type: str = 'database'
     ):
         """
         Almacena datos de mercado
-        
+
         :param data: Datos de mercado
         :param storage_type: Tipo de almacenamiento ('database', 'csv', 'json')
         """
@@ -115,7 +112,7 @@ class DataStorageManager:
         for symbol, timeframe_data in data.items():
             for timeframe, df in timeframe_data.items():
                 filename = os.path.join(
-                    self.storage_path, 
+                    self.storage_path,
                     f"{symbol}_{timeframe}_{datetime.now().strftime('%Y%m%d')}.csv"
                 )
                 df.to_csv(filename)
@@ -128,23 +125,23 @@ class DataStorageManager:
         for symbol, timeframe_data in data.items():
             for timeframe, df in timeframe_data.items():
                 filename = os.path.join(
-                    self.storage_path, 
+                    self.storage_path,
                     f"{symbol}_{timeframe}_{datetime.now().strftime('%Y%m%d')}.json"
                 )
                 df.to_json(filename)
                 self.logger.info(f"Datos almacenados en {filename}")
 
     def retrieve_market_data(
-        self, 
-        symbol: str, 
-        timeframe: str, 
+        self,
+        symbol: str,
+        timeframe: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         source: str = 'database'
     ) -> Optional[pd.DataFrame]:
         """
         Recupera datos de mercado
-        
+
         :param symbol: Símbolo del activo
         :param timeframe: Intervalo temporal
         :param start_date: Fecha de inicio
@@ -169,9 +166,9 @@ class DataStorageManager:
             return None
 
     def _retrieve_from_database(
-        self, 
-        symbol: str, 
-        timeframe: str, 
+        self,
+        symbol: str,
+        timeframe: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Optional[pd.DataFrame]:
@@ -193,9 +190,9 @@ class DataStorageManager:
             return None
 
     def _retrieve_from_csv(
-        self, 
-        symbol: str, 
-        timeframe: str, 
+        self,
+        symbol: str,
+        timeframe: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Optional[pd.DataFrame]:
@@ -204,24 +201,24 @@ class DataStorageManager:
         """
         try:
             filename = os.path.join(
-                self.storage_path, 
+                self.storage_path,
                 f"{symbol}_{timeframe}*.csv"
             )
             files = sorted(glob.glob(filename))
-            
+
             if not files:
                 self.logger.warning(f"No se encontraron archivos para {symbol}")
                 return None
 
             # Leer último archivo
             df = pd.read_csv(files[-1], index_col='timestamp', parse_dates=True)
-            
+
             # Filtrar por fechas
             if start_date:
                 df = df[df.index >= start_date]
             if end_date:
                 df = df[df.index <= end_date]
-            
+
             return df
 
         except Exception as e:
@@ -229,9 +226,9 @@ class DataStorageManager:
             return None
 
     def _retrieve_from_json(
-        self, 
-        symbol: str, 
-        timeframe: str, 
+        self,
+        symbol: str,
+        timeframe: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Optional[pd.DataFrame]:
@@ -240,11 +237,11 @@ class DataStorageManager:
         """
         try:
             filename = os.path.join(
-                self.storage_path, 
+                self.storage_path,
                 f"{symbol}_{timeframe}*.json"
             )
             files = sorted(glob.glob(filename))
-            
+
             if not files:
                 self.logger.warning(f"No se encontraron archivos para {symbol}")
                 return None
@@ -252,13 +249,13 @@ class DataStorageManager:
             # Leer último archivo
             df = pd.read_json(files[-1], orient='index', convert_axes=True)
             df.index = pd.to_datetime(df.index)
-            
+
             # Filtrar por fechas
             if start_date:
                 df = df[df.index >= start_date]
             if end_date:
                 df = df[df.index <= end_date]
-            
+
             return df
 
         except Exception as e:

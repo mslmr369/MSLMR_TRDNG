@@ -3,7 +3,8 @@ import sys
 from core.config_manager import ConfigManager
 from core.logging_system import setup_logging
 from core.database_interactor import DatabaseInteractor
-from trading.live_trading import start_trading_system
+from trading.live_trading import LiveTradingSystem
+import asyncio
 
 def main():
     # Initialize ConfigManager
@@ -20,8 +21,12 @@ def main():
         db_interactor = DatabaseInteractor(config['POSTGRES_URL'])
         db_interactor.create_tables()
 
-        # Start trading system
-        start_trading_system(config)
+        # Start trading system using asyncio.run() for async execution
+        async def run_trading_system():
+            trading_system = LiveTradingSystem()
+            await trading_system.start()
+
+        asyncio.run(run_trading_system())
 
     except Exception as e:
         logger.exception(f"Error crítico al iniciar {config['PROJECT_NAME']}")

@@ -114,3 +114,4 @@ class MarketNeuralNetwork(BaseModel):
                 setattr(self, key, value)
             else:
                 print(f"Advertencia: El hiperparámetro '{key}' no existe en el modelo.")
+

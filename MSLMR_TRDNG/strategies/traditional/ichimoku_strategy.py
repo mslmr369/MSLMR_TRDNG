@@ -79,4 +79,8 @@ class IchimokuStrategy(BaseStrategy):
             self.logger.error("Los parámetros window1, window2 y window3 deben ser enteros positivos.")
             return False
 
-        if not all(self.window1 < self.window2, self.window2
+        if not all(self.window1 < self.window2, self.window2 < self.window3):
+            self.logger.error("Los valores de window deben ser: window1 < window2 < window3")
+            return False
+
+        return True

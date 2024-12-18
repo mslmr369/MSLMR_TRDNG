@@ -1,4 +1,3 @@
-# core/__init__.py
 __all__ = [
     'BaseConfig',
     'get_config',

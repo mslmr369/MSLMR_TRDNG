@@ -1,14 +1,15 @@
 # core/models/__init__.py
-# Add the necessary imports for the models module
-from .postgres_models import Price, Indicator, Signal, Trade, Backtest
-from .elastic_models import Prediction, MarketAnalysis
+# Import the model classes here, so they are recognized by Alembic
+
+from .postgres_models import Base, Price, Indicator, Signal, Trade, Backtest, Alert
+# Import other model classes from elastic_models.py and mongo_models.py when needed
 
 __all__ = [
+    'Base',
     'Price',
     'Indicator',
     'Signal',
     'Trade',
     'Backtest',
-    'Prediction',
-    'MarketAnalysis'
+    'Alert'
 ]

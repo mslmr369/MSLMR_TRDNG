@@ -1,10 +1,10 @@
 # strategies/ml/ml_strategy.py
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import pandas as pd
 
 from core.logging_system import LoggingMixin
 from strategies.base import BaseStrategy
-from models.ml.base import BaseModel
+from .models import BaseModel
 from .features import FeatureExtractor
 
 class MLStrategy(BaseStrategy, LoggingMixin):
@@ -33,23 +33,27 @@ class MLStrategy(BaseStrategy, LoggingMixin):
         self.model = model
         self.feature_extractor = feature_extractor
 
-    def generate_signal(self, data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, data: pd.DataFrame) -> Optional[Dict[str, Any]]:
         """
-        Generates trading signals based on market data.
+        Generates trading signals based on market data and ML predictions.
 
         :param data: DataFrame with market data.
         :return: Dictionary with trading signals or None.
         """
-        # Extract features
-        features = self.feature_extractor.extract_features(data)
+        try:
+            # Extract features
+            features = self.feature_extractor.extract_features(data)
 
-        # Make prediction
-        prediction = self.model.predict(features)
+            # Make prediction
+            prediction = self.model.predict(features)
 
-        # Convert prediction to trading signal
-        signal = self.interpret_prediction(prediction)
+            # Interpret prediction and generate signal
+            signal = self.interpret_prediction(prediction)
+            return signal
 
-        return signal
+        except Exception as e:
+            self.logger.error(f"Error generating signal with {self.name}: {e}")
+            return None
 
     def interpret_prediction(self, prediction: Any) -> Optional[Dict]:
         """

@@ -44,3 +44,10 @@ class BaseConfig:
 															        """Devuelve un diccionario con toda la configuración"""
 																        return {k: v for k, v in cls.__dict__.items() 
 																	                if not k.startswith('__') and not callable(v)}
+                                                                         # Flags for enabling/disabling components
+    ENABLE_DATA_INGESTION: bool = True
+    ENABLE_LIVE_TRADING: bool = True
+    ENABLE_BACKTESTING: bool = True
+    ENABLE_DASHBOARD: bool = True
+    ENABLE_ALERTS: bool = True
+    ENABLE_ML_MODELS: bool = True

@@ -56,3 +56,4 @@ class FeatureExtractor:
         signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
         histogram = macd_line - signal_line
         return macd_line, signal_line, histogram
+

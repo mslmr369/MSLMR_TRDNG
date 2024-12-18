@@ -87,3 +87,4 @@ class MongoModels:
         collection = self.get_collection(collection_name)
         return collection.delete_many(query)
 
+

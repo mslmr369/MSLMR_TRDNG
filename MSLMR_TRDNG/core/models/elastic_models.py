@@ -18,3 +18,4 @@ class MarketAnalysis(Document):
 
     class Index:
         name = 'market_analysis'
+

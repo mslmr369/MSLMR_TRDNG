@@ -1,124 +1,80 @@
-import ccxt
+import ccxt.async_support as ccxt
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 from core.cache import CacheDecorator, CacheFactory
 from core.logging_system import log_method, LoggingMixin
-import logging
 import asyncio
+import pickle
 
-class DataIngestionManager(LoggingMixin):
-    def __init__(
-        self,
-        exchange_id: str = 'binance',
-        symbols: List[str] = ['BTC/USDT'],
-        timeframes: List[str] = ['1h', '4h', '1d']
-    ):
+class AsyncDataIngestionManager(LoggingMixin):
+    def __init__(self, exchange_id: str, symbols: List[str], timeframes: List[str]):
         self.exchange_id = exchange_id
         self.symbols = symbols
         self.timeframes = timeframes
-
-        # Inicializar exchange
-        self.exchange = getattr(ccxt, exchange_id)()
-
-        # Inicializar caché
         self.cache_factory = CacheFactory()
         self.data_cache = self.cache_factory.get_cache('market_data')
 
-        # Logger
-        self.logger = logging.getLogger(__name__)
+        # Asynchronously initialize the exchange
+        self.exchange = getattr(ccxt, self.exchange_id)()
 
-    @CacheDecorator(cache_client=CacheFactory().get_cache('market_data'), key_prefix='historical_data')
-    def fetch_historical_data(
-        self,
-        symbol: str,
-        timeframe: str,
-        limit: int = 1000
-    ) -> pd.DataFrame:
-        # ... (Rest of the code remains the same) ...
-
-class AsyncDataIngestionManager(DataIngestionManager):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.exchange = getattr(ccxt.async_support, self.exchange_id)()
-
-    async def async_fetch_historical_data(
-        self,
-        symbol: str,
-        timeframe: str,
-        limit: int = 1000
-    ) -> pd.DataFrame:
-        """
-        Obtiene datos históricos de un símbolo de forma asíncrona
-
-        :param symbol: Símbolo del activo
-        :param timeframe: Intervalo temporal
-        :param limit: Número máximo de candeleros
-        :return: DataFrame con datos históricos
-        """
-        # Buscar en caché primero
-        cache_key = f"{symbol}_{timeframe}_historical"
+    async def async_fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
+        cache_key = f"{self.exchange_id}:{symbol}:{timeframe}:{limit}"
         cached_data = self.data_cache._client.get(cache_key)
 
         if cached_data:
-            return pd.read_json(cached_data)
+            self.logger.info(f"Cache hit for {cache_key}")
+            self.data_cache.increment_hit_counter(hit=True)
+            df = pd.DataFrame(pickle.loads(cached_data))  # Unpickle the data
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+            return df
+
+        self.data_cache.increment_hit_counter(hit=False)
 
         try:
-            # Obtener datos del exchange
+            self.logger.info(f"Fetching OHLCV data for {symbol} on {timeframe} from exchange")
             ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-
-            # Convertir a DataFrame
-            df = pd.DataFrame(ohlcv, columns=[
-                'timestamp', 'open', 'high', 'low', 'close', 'volume'
-            ])
-
-            # Convertir timestamp a datetime
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
 
-            # Almacenar en caché
-            self.data_cache._client.set(
-                cache_key,
-                df.to_json(),
-                ex=3600  # 1 hora de caché
-            )
+            # Convert the DataFrame to bytes using pickle
+            data_to_cache = pickle.dumps(df.to_dict(orient='records'))
+
+            # Cache the result with an expiration time of 1 hour (3600 seconds)
+            self.data_cache._client.setex(cache_key, 3600, data_to_cache)
 
             return df
 
-        except Exception as e:
-            self.logger.error(f"Error fetching data for {symbol}: {e}")
+        except ccxt.NetworkError as e:
+            self.logger.error(f"Network error fetching {symbol} {timeframe}: {e}")
             raise
+        except ccxt.ExchangeError as e:
+            self.logger.error(f"Exchange error fetching {symbol} {timeframe}: {e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error fetching {symbol} {timeframe}: {e}")
+            raise
+
+    async def close_connections(self):
+        await self.exchange.close()
 
     async def concurrent_data_fetch(
         self,
         limit: int = 1000
     ) -> Dict[str, Dict[str, pd.DataFrame]]:
-        """
-        Obtiene datos en paralelo para múltiples símbolos y timeframes
-
-        :param limit: Número máximo de candeleros por símbolo/timeframe
-        :return: Diccionario anidado de DataFrames
-        """
         all_data = {}
 
         async def fetch_and_store(symbol, timeframe):
             try:
-                df = await self.async_fetch_historical_data(
-                    symbol, timeframe, limit
-                )
+                df = await self.async_fetch_ohlcv(symbol, timeframe, limit)
                 if symbol not in all_data:
                     all_data[symbol] = {}
                 all_data[symbol][timeframe] = df
             except Exception as e:
-                self.logger.warning(
-                    f"Error fetching data for {symbol} on {timeframe}: {e}"
-                )
+                self.logger.error(f"Error fetching data for {symbol} on {timeframe}: {e}")
 
-        tasks = [
-            fetch_and_store(symbol, timeframe)
-            for symbol in self.symbols
-            for timeframe in self.timeframes
-        ]
-
+        tasks = [fetch_and_store(symbol, timeframe) for symbol in self.symbols for timeframe in self.timeframes]
         await asyncio.gather(*tasks)
+
         return all_data

@@ -35,7 +35,7 @@ class DataIngestionManager(LoggingMixin):
         timeframe: str,
         limit: int = 1000
     ) -> pd.DataFrame:
-        # ... (Rest of the code) ...
+        # ... (Rest of the code remains the same) ...
 
 class AsyncDataIngestionManager(DataIngestionManager):
     def __init__(self, *args, **kwargs):
@@ -50,7 +50,7 @@ class AsyncDataIngestionManager(DataIngestionManager):
     ) -> pd.DataFrame:
         """
         Obtiene datos históricos de un símbolo de forma asíncrona
-        
+
         :param symbol: Símbolo del activo
         :param timeframe: Intervalo temporal
         :param limit: Número máximo de candeleros
@@ -95,7 +95,7 @@ class AsyncDataIngestionManager(DataIngestionManager):
     ) -> Dict[str, Dict[str, pd.DataFrame]]:
         """
         Obtiene datos en paralelo para múltiples símbolos y timeframes
-        
+
         :param limit: Número máximo de candeleros por símbolo/timeframe
         :return: Diccionario anidado de DataFrames
         """

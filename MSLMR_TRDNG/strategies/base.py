@@ -13,7 +13,7 @@ class BaseStrategy(ABC):
         self,
         name: str = 'BaseStrategy',
         description: str = 'Estrategia base de trading',
-        risk_manager: Optional[RiskManager] = None  # Add RiskManager here
+        risk_manager: Optional[RiskManager] = None
     ):
         """
         Inicializa una estrategia base
@@ -25,7 +25,7 @@ class BaseStrategy(ABC):
         self.name = name
         self.description = description
         self.parameters = {}
-        self.risk_manager = risk_manager or RiskManager() # Use default if not provided
+        self.risk_manager = risk_manager or RiskManager()  # Use default if not provided
 
     @abstractmethod
     def generate_signal(self, data: pd.DataFrame) -> Optional[Dict[str, Any]]:

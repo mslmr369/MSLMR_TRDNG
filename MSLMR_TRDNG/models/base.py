@@ -55,3 +55,4 @@ class BaseModel(ABC):
         Sets the model's hyperparameters.
         """
         pass
+

@@ -146,23 +146,23 @@ class TimeSeriesForecaster(BaseModel):
         batch_size: int = 32,
         validation_split: float = 0.2
     ):
-
         """
         Entrena el modelo de forecasting
-        
+
         :param data: DataFrame con datos
+        :param target: This parameter is not used in this model but kept for compatibility with BaseModel, it uses 'close' as target.
         :param epochs: Número de épocas
         :param batch_size: Tamaño de lote
         :param validation_split: Proporción de datos para validación
         """
         # Preparar datos
         X, y = self._prepare_data(data)
-        
+
         # Dividir datos
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=validation_split
         )
-        
+
         # Construir modelo según tipo
         if self.model_type == 'lstm':
             self.model = self._build_lstm_model(X_train.shape[1:])
@@ -172,7 +172,7 @@ class TimeSeriesForecaster(BaseModel):
             self.model = self._build_transformer_model(X_train.shape[1:])
         else:
             raise ValueError(f"Tipo de modelo no soportado: {self.model_type}")
-        
+
         # Entrenar
         history = self.model.fit(
             X_train, y_train,
@@ -181,17 +181,11 @@ class TimeSeriesForecaster(BaseModel):
             validation_data=(X_test, y_test),
             verbose=1
         )
-        
+
         self.is_trained = True
         return history
-    
+
     def predict(self, data: pd.DataFrame) -> np.ndarray:
-        """
-        Realiza predicciones
-        
-        :param data: DataFrame con datos
-        :return: Predicciones
-        """
         if not self.is_trained:
             raise ValueError("El modelo no ha sido entrenado. Ejecuta train() primero.")
         
@@ -203,56 +197,73 @@ class TimeSeriesForecaster(BaseModel):
         prediction = self.model.predict(X_input)
         
         # Invertir escalado
-        return self.scaler.inverse_transform(prediction)
+        # Create a zero-filled array with the same number of samples and features as the input data
+        dummy = np.zeros((prediction.shape[0], len(self.features)))
+        # Replace the first column with the prediction
+        dummy[:, 0] = prediction.flatten()
+        # Invert the scaling
+        prediction_original_scale = self.scaler.inverse_transform(dummy)[:, 0]
     
-    def save_model(self, filepath: str):
-        """
-        Guarda el modelo entrenado
-        
-        :param filepath: Ruta para guardar el modelo
-        """
+        return prediction_original_scale
+
+    def save(self, filepath: str):
         if not self.is_trained:
             raise ValueError("El modelo no ha sido entrenado. Ejecuta train() primero.")
-        
         self.model.save(filepath)
-    
-    def load_model(self, filepath: str):
-        """
-        Carga un modelo previamente guardado
-        
-        :param filepath: Ruta del modelo guardado
-        """
+
+    def load(self, filepath: str):
         self.model = tf.keras.models.load_model(filepath)
         self.is_trained = True
 
-# Ejemplo de uso
-def main():
-    # Cargar datos
-    dates = pd.date_range(start='2022-01-01', end='2023-01-01')
-    np.random.seed(42)
-    prices = np.cumsum(np.random.normal(0, 1, len(dates))) + 100
-    df = pd.DataFrame({
-        'close': prices,
-        'volume': np.random.random(len(dates))
-    }, index=dates)
-    
-    # Inicializar y entrenar modelo
-    forecaster = TimeSeriesForecaster(
-        model_type='lstm', 
-        sequence_length=30, 
-        forecast_horizon=5,
-        features=['close', 'volume']
-    )
-    
-    history = forecaster.train(df, epochs=20)
-    
-    # Predecir
-    prediction = forecaster.predict(df)
-    print("Predicción:", prediction)
-    
-    # Guardar modelo
-    forecaster.save_model('market_forecast_model.h5')
+    def evaluate(self, data: pd.DataFrame, target: str = None, metrics: List[str] = ['mse', 'mae']) -> Dict[str, Any]:
+        """
+        Evalúa el modelo de forecasting
 
-if __name__ == "__main__":
-    main()
+        :param data: DataFrame con datos
+        :param target: This parameter is not used in this model but kept for compatibility with BaseModel, it uses 'close' as target.
+        :param metrics: Lista de métricas a evaluar
+        :return: Diccionario con los resultados de la evaluación
+        """
+        if not self.is_trained:
+            raise ValueError("El modelo no ha sido entrenado. Ejecuta train() primero.")
 
+        X, y = self._prepare_data(data)
+        y_pred = self.model.predict(X)
+
+        results = {}
+        if 'mse' in metrics:
+            results['mse'] = tf.keras.metrics.mean_squared_error(
+                y.flatten(), y_pred.flatten()
+            ).numpy()
+        if 'mae' in metrics:
+            results['mae'] = tf.keras.metrics.mean_absolute_error(
+                y.flatten(), y_pred.flatten()
+            ).numpy()
+
+        return results
+    
+    def get_hyperparameters(self) -> Dict[str, Any]:
+        """
+        Obtiene los hiperparámetros del modelo.
+
+        :return: Diccionario con los hiperparámetros del modelo
+        """
+        hyperparameters = {
+            'model_type': self.model_type,
+            'sequence_length': self.sequence_length,
+            'forecast_horizon': self.forecast_horizon,
+            'features': self.features
+        }
+        return hyperparameters
+
+    def set_hyperparameters(self, **kwargs):
+        """
+        Establece los hiperparámetros del modelo.
+
+        :param kwargs: Diccionario con los hiperparámetros a establecer
+        """
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                print(f"Advertencia: El hiperparámetro '{key}' no existe en el modelo.")

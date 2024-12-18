@@ -1,4 +1,4 @@
-from typing import Dict, Type, Any, Optional
+from typing import Dict, Type, Any, Optional, List
 from models.base import BaseModel
 from core.logging_system import LoggingMixin
 

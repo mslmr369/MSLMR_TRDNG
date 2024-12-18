@@ -1,3 +1,4 @@
+# Correctly using DatabaseInteractor and removing session management
 import os
 import json
 import pandas as pd
@@ -7,54 +8,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from typing import Dict, List, Optional
 import logging
 from datetime import datetime
-
-# Base para modelos SQLAlchemy
-Base = declarative_base()
-
-class MarketDataModel(Base):
-    """
-    Modelo de almacenamiento de datos de mercado
-    """
-    __tablename__ = 'market_data'
-
-    id = sa.Column(sa.Integer, primary_key=True)
-    symbol = sa.Column(sa.String(20), nullable=False)
-    timeframe = sa.Column(sa.String(10), nullable=False)
-    timestamp = sa.Column(sa.DateTime, nullable=False)
-    open = sa.Column(sa.Float, nullable=False)
-    high = sa.Column(sa.Float, nullable=False)
-    low = sa.Column(sa.Float, nullable=False)
-    close = sa.Column(sa.Float, nullable=False)
-    volume = sa.Column(sa.Float, nullable=False)
-    
-    # Índices para mejorar rendimiento
-    __table_args__ = (
-        sa.Index('idx_symbol_timeframe', 'symbol', 'timeframe'),
-        sa.Index('idx_timestamp', 'timestamp')
-    )
-
-class IndicatorDataModel(Base):
-    """
-    Modelo de almacenamiento de indicadores
-    """
-    __tablename__ = 'indicators'
-
-    id = sa.Column(sa.Integer, primary_key=True)
-    symbol = sa.Column(sa.String(20), nullable=False)
-    timeframe = sa.Column(sa.String(10), nullable=False)
-    timestamp = sa.Column(sa.DateTime, nullable=False)
-    
-    # Indicadores genéricos
-    rsi = sa.Column(sa.Float)
-    macd_line = sa.Column(sa.Float)
-    macd_signal = sa.Column(sa.Float)
-    macd_histogram = sa.Column(sa.Float)
-    
-    # Índices
-    __table_args__ = (
-        sa.Index('idx_symbol_timeframe', 'symbol', 'timeframe'),
-        sa.Index('idx_timestamp', 'timestamp')
-    )
+from core.database_interactor import DatabaseInteractor
+from core.database import Base
+from data.models import MarketDataModel, IndicatorDataModel
 
 class DataStorageManager:
     """
@@ -80,15 +36,15 @@ class DataStorageManager:
         self.storage_path = storage_path
         
         # Configurar base de datos si se proporciona URL
+        self.db_interactor = None
         if database_url:
             try:
-                self.engine = sa.create_engine(database_url)
-                Base.metadata.create_all(self.engine)
-                self.Session = sessionmaker(bind=self.engine)
+                self.db_interactor = DatabaseInteractor(database_url)
+                self.db_interactor.create_tables()
+                self.logger.info("Database tables created successfully.")
             except Exception as e:
-                self.logger.error(f"Error configurando base de datos: {e}")
-                self.engine = None
-                self.Session = None
+                self.logger.error(f"Error setting up database: {e}")
+                self.db_interactor = None
 
     def store_market_data(
         self, 
@@ -101,7 +57,7 @@ class DataStorageManager:
         :param data: Datos de mercado
         :param storage_type: Tipo de almacenamiento ('database', 'csv', 'json')
         """
-        if storage_type == 'database' and self.Session:
+        if storage_type == 'database' and self.db_interactor:
             self._store_to_database(data)
         elif storage_type == 'csv':
             self._store_to_csv(data)
@@ -114,11 +70,10 @@ class DataStorageManager:
         """
         Almacena datos en base de datos PostgreSQL
         """
-        if not self.Session:
-            self.logger.error("No se ha configurado conexión a base de datos")
+        if not self.db_interactor:
+            self.logger.error("DatabaseInteractor is not initialized.")
             return
 
-        session = self.Session()
         try:
             for symbol, timeframe_data in data.items():
                 for timeframe, df in timeframe_data.items():
@@ -134,7 +89,7 @@ class DataStorageManager:
                             close=row['close'],
                             volume=row['volume']
                         )
-                        session.merge(market_data)
+                        self.db_interactor.store_data([market_data])
 
                         # Guardar indicadores si existen
                         if 'rsi' in row:
@@ -147,15 +102,11 @@ class DataStorageManager:
                                 macd_signal=row.get('signal_line'),
                                 macd_histogram=row.get('histogram')
                             )
-                            session.merge(indicator_data)
+                            self.db_interactor.store_data([indicator_data])
 
-            session.commit()
             self.logger.info("Datos almacenados exitosamente en base de datos")
         except Exception as e:
-            session.rollback()
             self.logger.error(f"Error almacenando datos en base de datos: {e}")
-        finally:
-            session.close()
 
     def _store_to_csv(self, data: Dict[str, Dict[str, pd.DataFrame]]):
         """
@@ -201,7 +152,7 @@ class DataStorageManager:
         :param source: Fuente de datos
         :return: DataFrame con datos de mercado
         """
-        if source == 'database' and self.Session:
+        if source == 'database' and self.db_interactor:
             return self._retrieve_from_database(
                 symbol, timeframe, start_date, end_date
             )
@@ -227,47 +178,19 @@ class DataStorageManager:
         """
         Recupera datos desde base de datos PostgreSQL
         """
-        if not self.Session:
-            self.logger.error("No se ha configurado conexión a base de datos")
+        if not self.db_interactor:
+            self.logger.error("DatabaseInteractor is not initialized.")
             return None
 
-        session = self.Session()
         try:
-            # Consulta base de datos
-            query = session.query(MarketDataModel).filter_by(
-                symbol=symbol, timeframe=timeframe
+            df = self.db_interactor.retrieve_data(
+                MarketDataModel, symbol, timeframe, start_date, end_date
             )
-            
-            # Filtrar por fechas si se proporcionan
-            if start_date:
-                query = query.filter(MarketDataModel.timestamp >= start_date)
-            if end_date:
-                query = query.filter(MarketDataModel.timestamp <= end_date)
-            
-            # Convertir a DataFrame
-            data = query.all()
-            if not data:
-                return None
-
-            df = pd.DataFrame([
-                {
-                    'timestamp': row.timestamp,
-                    'open': row.open,
-                    'high': row.high,
-                    'low': row.low,
-                    'close': row.close,
-                    'volume': row.volume
-                } for row in data
-            ])
-            
-            df.set_index('timestamp', inplace=True)
             return df
 
         except Exception as e:
-            self.logger.error(f"Error recuperando datos: {e}")
+            self.logger.error(f"Error retrieving data from database: {e}")
             return None
-        finally:
-            session.close()
 
     def _retrieve_from_csv(
         self, 
@@ -341,31 +264,3 @@ class DataStorageManager:
         except Exception as e:
             self.logger.error(f"Error recuperando datos JSON: {e}")
             return None
-
-# Ejemplo de uso
-def main():
-    # Configurar gestor de almacenamiento
-    storage_manager = DataStorageManager(
-        database_url='postgresql://user:pass@localhost/trading_db',
-        storage_path='./data/market_data'
-    )
-
-    # Simular datos de mercado
-    from data.ingestion import MultiSymbolDataIngestion
-    data_ingestion = MultiSymbolDataIngestion()
-    market_data = data_ingestion.concurrent_data_fetch()
-
-    # Almacenar datos en base de datos
-    storage_manager.store_market_data(market_data, storage_type='database')
-
-    # Recuperar datos
-    retrieved_data = storage_manager.retrieve_market_data(
-        symbol='BTC/USDT', 
-        timeframe='1h',
-        start_date=datetime.now() - pd.Timedelta(days=7)
-    )
-
-    print(retrieved_data)
-
-if __name__ == "__main__":
-    main()

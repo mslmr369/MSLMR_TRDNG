@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine, MetaData
+# core/database.py
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 import redis
@@ -7,4 +8,4 @@ from typing import Dict, Any
 
 # Base declarativa para modelos de SQLAlchemy
 Base = declarative_base()
-metadata = MetaData()
+metadata = Base.metadata

@@ -262,18 +262,19 @@ def main():
         end_date=datetime(2023, 1, 1)
     )
     
-    # Inicializar motor de backtesting
+    # Inicial
+        # Inicializar motor de backtesting
     backtest_engine = BacktestEngine(config)
-    
+
     # Estrategias a testear
     strategies = [
         RSIMACDStrategy(),
         MovingAverageStrategy()
     ]
-    
+
     # Ejecutar backtesting
     results = backtest_engine.run_multiple_strategies(strategies)
-    
+
     # Imprimir resultados
     for strategy_name, metrics in results.items():
         print(f"Resultados para {strategy_name}:")

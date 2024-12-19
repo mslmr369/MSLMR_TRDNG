@@ -76,3 +76,4 @@ class ConfigManager:
         :return: The configuration value.
         """
         return getattr(self._config, key, default)
+

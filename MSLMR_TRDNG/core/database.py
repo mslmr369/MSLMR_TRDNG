@@ -8,22 +8,29 @@ logger = logging.getLogger(__name__)
 
 # Database Configuration
 config_manager = ConfigManager()
-db_config = config_manager.get_config().get('DB_CONFIG', {})
 
-DATABASE_URL = f"postgresql://{db_config.get('user')}:{db_config.get('password')}@{db_config.get('host')}:{db_config.get('port')}/{db_config.get('database')}"
-print (DATABASE_URL)
+# Deberíamos tener ya las variables de entorno cargadas desde el main
+db_config = config_manager.get_config()
+DATABASE_URL = db_config.get('POSTGRES_URL')
 
-# Database engine
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
-    pool_recycle=1800
-)
+print("DATABASE_URL:", DATABASE_URL)  # Debug: Imprimir la URL
+engine = None  # Inicializar engine como None
 
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = None # y la sesión también
+
+def initialize_database():
+    global engine
+    global SessionLocal
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800
+    )
+
+    SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+
 
 # Declarative base for models
 Base = declarative_base()

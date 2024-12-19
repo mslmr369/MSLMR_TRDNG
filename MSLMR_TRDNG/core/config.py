@@ -3,7 +3,10 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+#load_dotenv()
+
+# Debug: Imprimir variables de entorno
+print("Environment Variables:", os.environ)
 
 class BaseConfig:
     """Base configuration"""
